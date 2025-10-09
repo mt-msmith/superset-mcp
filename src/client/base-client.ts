@@ -233,24 +233,34 @@ export class BaseSuperset {
   protected async makeProtectedRequest(config: any): Promise<any> {
     await this.ensureAuthenticated();
     const { token, sessionCookie } = await this.ensureCsrfToken();
-    
+
+    // Build headers - use session cookie if configured, otherwise use token auth
+    const headers: any = {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': token,
+      'Referer': this.config.baseUrl,
+      ...config.headers,
+    };
+
+    // Add authentication
+    if (this.config.sessionCookie) {
+      headers['Cookie'] = this.config.sessionCookie;
+    } else if (this.config.accessToken) {
+      headers['Authorization'] = `Bearer ${this.config.accessToken}`;
+    }
+
+    // If CSRF endpoint returned a session cookie, use it
+    if (sessionCookie && !this.config.sessionCookie) {
+      headers['Cookie'] = `session=${sessionCookie}`;
+    }
+
     // Create a new axios instance to handle this specific request
     const protectedApi = axios.create({
       baseURL: this.config.baseUrl,
       timeout: 120000,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.accessToken}`,
-        'X-CSRFToken': token,
-        ...config.headers,
-      },
-      withCredentials: true,
+      headers,
+      withCredentials: !this.config.sessionCookie, // Only use withCredentials if not using manual cookie
     });
-
-    // If session cookie exists, add it to the request
-    if (sessionCookie) {
-      protectedApi.defaults.headers.common['Cookie'] = `session=${sessionCookie}`;
-    }
 
     // Add response interceptor for token expiration handling
     protectedApi.interceptors.response.use(

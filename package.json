@@ -25,8 +25,7 @@
   },
   "files": [
     "build",
-    "README.md",
-    "README_zh.md"
+    "README.md"
   ],
   "keywords": [
     "mcp",
