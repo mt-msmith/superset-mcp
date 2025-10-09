@@ -305,35 +305,42 @@ export function formatDatabaseError(error: unknown, operation: string): string {
   if (error instanceof Error && 'response' in error) {
     const axiosError = error as any;
     const response = axiosError.response;
-    
+
     if (response) {
       let errorDetails = `Database ${operation} Error\n\n`;
       errorDetails += `Status: ${response.status} ${response.statusText}\n\n`;
-      
+
       if (response.status === 404) {
         errorDetails += `Reason: Database not found\n`;
         errorDetails += `Solution: Please check if the database ID is correct\n`;
+      } else if (response.status === 422) {
+        errorDetails += `Reason: Request validation failed\n`;
       } else if (response.status === 500) {
         errorDetails += `Reason: Database connection or server error\n`;
         errorDetails += `Solution: Please check database connectivity and server status\n`;
       }
-      
+
       if (response.data && typeof response.data === 'object') {
         if (response.data.message) {
           errorDetails += `\nMessage: ${response.data.message}\n`;
         }
-        
+
         if (response.data.errors && Array.isArray(response.data.errors)) {
           errorDetails += `\nDetails:\n`;
           response.data.errors.forEach((err: any, index: number) => {
             errorDetails += `  ${index + 1}. ${typeof err === 'string' ? err : err.message || JSON.stringify(err)}\n`;
           });
         }
+
+        // For debugging, show full response data
+        if (!response.data.message && !response.data.errors) {
+          errorDetails += `\nFull Response:\n${JSON.stringify(response.data, null, 2)}\n`;
+        }
       }
-      
+
       return errorDetails;
     }
   }
-  
+
   return getErrorMessage(error);
 } 

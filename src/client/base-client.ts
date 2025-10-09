@@ -15,17 +15,14 @@ export class BaseSuperset {
 
   constructor(config: SupersetConfig) {
     this.config = config;
-    this.api = axios.create({
+
+    const axiosConfig: any = {
       baseURL: config.baseUrl,
       timeout: 120000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      withCredentials: true, // Enable cookie support to maintain session
       // Prevent axios from automatically parsing JSON to handle non-JSON responses gracefully
-      transformResponse: [(data, headers) => {
+      transformResponse: [(data: any, headers: any) => {
         const contentType = headers['content-type'] || '';
-        
+
         // If response is JSON, parse it
         if (contentType.includes('application/json')) {
           try {
@@ -35,21 +32,44 @@ export class BaseSuperset {
             return data;
           }
         }
-        
+
         // For non-JSON responses, return raw data
         return data;
       }],
-    });
+    };
+
+    // Only enable withCredentials if NOT using manual cookie setting
+    if (!config.sessionCookie) {
+      axiosConfig.withCredentials = true;
+    }
+
+    this.api = axios.create(axiosConfig);
 
     this.setupInterceptors();
   }
 
   private setupInterceptors(): void {
-    // Request interceptor: add authentication token
+    // Request interceptor: add authentication token and set appropriate headers
     this.api.interceptors.request.use((config) => {
-      if (this.config.accessToken) {
-        config.headers.Authorization = `Bearer ${this.config.accessToken}`;
+      // Cookie-based authentication (SSO)
+      if (this.config.sessionCookie) {
+        // Ensure headers object exists and set cookie
+        if (!config.headers) {
+          config.headers = {} as any;
+        }
+        // Set as a plain header property
+        config.headers['cookie'] = this.config.sessionCookie;
       }
+      // Token-based authentication
+      else if (this.config.accessToken) {
+        config.headers['Authorization'] = `Bearer ${this.config.accessToken}`;
+      }
+
+      // Only set Content-Type for requests with a body (POST, PUT, PATCH)
+      if (config.method && ['post', 'put', 'patch'].includes(config.method.toLowerCase())) {
+        config.headers['Content-Type'] = 'application/json';
+      }
+
       return config;
     });
 
@@ -141,12 +161,21 @@ export class BaseSuperset {
 
   // Authentication login
   async authenticate(): Promise<void> {
-    if (this.config.accessToken && this.isAuthenticated) {
+    // If session cookie is provided (SSO), mark as authenticated and skip login
+    if (this.config.sessionCookie) {
+      this.isAuthenticated = true;
       return;
     }
 
+    // If access token is provided, mark as authenticated and skip login
+    if (this.config.accessToken) {
+      this.isAuthenticated = true;
+      return;
+    }
+
+    // For username/password authentication, verify credentials are provided
     if (!this.config.username || !this.config.password) {
-      throw new Error("Username and password or access token required");
+      throw new Error("Username and password, access token, or session cookie required");
     }
 
     try {

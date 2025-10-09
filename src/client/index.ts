@@ -12,12 +12,13 @@ export function initializeSupersetClient(): SupersetClient {
       username: process.env.SUPERSET_USERNAME,
       password: process.env.SUPERSET_PASSWORD,
       accessToken: process.env.SUPERSET_ACCESS_TOKEN,
+      sessionCookie: process.env.SUPERSET_SESSION_COOKIE,
       authProvider: process.env.SUPERSET_AUTH_PROVIDER,
     };
-    
+
     supersetClient = new SupersetClient(config);
   }
-  
+
   return supersetClient;
 }
 

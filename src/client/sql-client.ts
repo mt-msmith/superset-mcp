@@ -10,7 +10,7 @@ export class SqlClient extends BaseSuperset {
   // Get database list
   async getDatabases(): Promise<any[]> {
     await this.ensureAuthenticated();
-    
+
     try {
       const response = await this.api.get('/api/v1/database/');
       return response.data.result;
