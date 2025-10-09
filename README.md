@@ -2,8 +2,6 @@
 
 A Model Context Protocol (MCP) server for managing Apache Superset datasets, metrics, and SQL queries.
 
-> 📖 [中文文档](README_zh.md)
-
 ## 🚀 Features
 
 - **Dataset Management**: Full CRUD operations for Superset datasets
@@ -14,12 +12,14 @@ A Model Context Protocol (MCP) server for managing Apache Superset datasets, met
 - **SQL Query Execution**: Execute SQL queries directly through Superset
 - **Database Integration**: List and manage database connections
 - **Resource Access**: Browse datasets, databases, and metrics through MCP resources
+- **Read-Only Mode**: Restrict access to read-only databases and block write operations
+- **Flexible Authentication**: Support for username/password, access tokens, and SSO session cookies
 
 ## 📋 Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - Access to an Apache Superset instance
-- Valid Superset credentials (username/password or access token)
+- Valid Superset credentials (username/password, access token, or session cookie)
 
 ## 🛠️ Installation
 
@@ -48,23 +48,60 @@ Add the following configuration to your MCP settings file:
 ```
 
 #### 2. Environment Variables
-Configure your Superset connection by updating the `env` section in the MCP configuration:
+Configure your Superset connection by updating the `env` section in the MCP configuration.
 
+**Option 1: Username/Password Authentication**
 ```json
 "env": {
-  "SUPERSET_BASE_URL": "your-superset-url",
+  "SUPERSET_BASE_URL": "https://your-superset-url.com",
   "SUPERSET_USERNAME": "your_username",
-  "SUPERSET_PASSWORD": "your_password",
+  "SUPERSET_PASSWORD": "your_password"
 }
 ```
 
-**Alternative: Using Access Token**
+**Option 2: Access Token Authentication**
 ```json
 "env": {
-  "SUPERSET_BASE_URL": "your-superset-url",
+  "SUPERSET_BASE_URL": "https://your-superset-url.com",
   "SUPERSET_ACCESS_TOKEN": "your_access_token"
 }
 ```
+
+**Option 3: Session Cookie Authentication (for SSO)**
+
+For SSO-based authentication, you'll need to extract your session cookie from the browser:
+
+1. Log into Superset through your SSO provider
+2. Open browser DevTools (F12)
+3. Go to Application/Storage → Cookies
+4. Find your Superset domain and copy the `session` cookie value
+5. Use it in your configuration:
+
+```json
+"env": {
+  "SUPERSET_BASE_URL": "https://your-superset-url.com",
+  "SUPERSET_SESSION_COOKIE": "session=.eJyVkE1z2jAQhv9Kx..."
+}
+```
+
+**Note:** Session cookies typically expire after a period of time. You'll need to refresh the cookie value when it expires by re-extracting it from your browser session.
+
+#### 3. Read-Only Mode (Optional)
+
+Enable read-only mode to restrict database access and prevent write operations:
+
+```json
+"env": {
+  "SUPERSET_BASE_URL": "https://your-superset-url.com",
+  "SUPERSET_SESSION_COOKIE": "session=.eJyVkE1z2jAQhv9Kx...",
+  "SUPERSET_READ_ONLY_MODE": "true"
+}
+```
+
+When enabled, read-only mode:
+- **Filters databases**: Only databases with names starting with `READONLY` or `READER` are accessible
+- **Blocks write operations**: INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, REPLACE, MERGE, GRANT, REVOKE commands are blocked
+- **Allows read operations**: SELECT queries continue to work normally
 
 ## 🔧 Available Tools
 

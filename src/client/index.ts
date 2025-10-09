@@ -14,6 +14,7 @@ export function initializeSupersetClient(): SupersetClient {
       accessToken: process.env.SUPERSET_ACCESS_TOKEN,
       sessionCookie: process.env.SUPERSET_SESSION_COOKIE,
       authProvider: process.env.SUPERSET_AUTH_PROVIDER,
+      readOnlyMode: process.env.SUPERSET_READ_ONLY_MODE === 'true',
     };
 
     supersetClient = new SupersetClient(config);
