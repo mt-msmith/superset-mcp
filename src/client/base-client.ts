@@ -167,14 +167,14 @@ export class BaseSuperset {
       return;
     }
 
-    // If access token is provided, mark as authenticated and skip login
-    if (this.config.accessToken) {
-      this.isAuthenticated = true;
-      return;
-    }
-
-    // For username/password authentication, verify credentials are provided
+    // If username/password are available, always use them to get a fresh token.
+    // A pre-configured accessToken may be stale, so credentials take priority.
     if (!this.config.username || !this.config.password) {
+      // No credentials — fall back to a pre-configured access token if present
+      if (this.config.accessToken) {
+        this.isAuthenticated = true;
+        return;
+      }
       throw new Error("Username and password, access token, or session cookie required");
     }
 
@@ -232,76 +232,47 @@ export class BaseSuperset {
   // Execute CSRF-protected request
   protected async makeProtectedRequest(config: any): Promise<any> {
     await this.ensureAuthenticated();
-    const { token, sessionCookie } = await this.ensureCsrfToken();
+    const { token } = await this.ensureCsrfToken();
 
-    // Build headers - use session cookie if configured, otherwise use token auth
-    const headers: any = {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': token,
-      'Referer': this.config.baseUrl,
-      ...config.headers,
-    };
-
-    // Add authentication
+    // Build auth header
+    const authHeader: any = {};
     if (this.config.sessionCookie) {
-      headers['Cookie'] = this.config.sessionCookie;
+      authHeader['Cookie'] = this.config.sessionCookie;
     } else if (this.config.accessToken) {
-      headers['Authorization'] = `Bearer ${this.config.accessToken}`;
+      authHeader['Authorization'] = `Bearer ${this.config.accessToken}`;
     }
 
-    // If CSRF endpoint returned a session cookie, use it
-    if (sessionCookie && !this.config.sessionCookie) {
-      headers['Cookie'] = `session=${sessionCookie}`;
-    }
-
-    // Create a new axios instance to handle this specific request
-    const protectedApi = axios.create({
+    // Merge all headers directly into the request config so axios 1.x doesn't drop them
+    const requestConfig = {
+      ...config,
       baseURL: this.config.baseUrl,
       timeout: 120000,
-      headers,
-      withCredentials: !this.config.sessionCookie, // Only use withCredentials if not using manual cookie
-    });
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': token,
+        'Referer': this.config.baseUrl,
+        ...authHeader,
+        ...config.headers,
+      },
+    };
 
-    // Add response interceptor for token expiration handling
-    protectedApi.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
-        
-        // Check if it's a 401 error and not the login request itself
-        if (error.response?.status === 401 && 
-            !originalRequest._retry && 
-            !originalRequest.url?.includes('/api/v1/security/login')) {
-          
-          originalRequest._retry = true;
-          
-          try {
-            // Refresh token
-            await this.refreshToken();
-            
-            // Re-obtain CSRF token
-            const { token: newToken, sessionCookie: newSessionCookie } = await this.ensureCsrfToken();
-            
-            // Update request headers
-            originalRequest.headers.Authorization = `Bearer ${this.config.accessToken}`;
-            originalRequest.headers['X-CSRFToken'] = newToken;
-            if (newSessionCookie) {
-              originalRequest.headers['Cookie'] = `session=${newSessionCookie}`;
-            }
-            
-            // Retry original request
-            return protectedApi.request(originalRequest);
-          } catch (refreshError) {
-            // Refresh failed, clear authentication state
-            this.clearAuthState();
-            throw error;
-          }
-        }
-        
-        return Promise.reject(error);
+    try {
+      return await axios(requestConfig);
+    } catch (error: any) {
+      if (error.response?.status === 401 && !config._retry) {
+        await this.refreshToken();
+        const { token: newToken } = await this.ensureCsrfToken();
+        return await axios({
+          ...requestConfig,
+          _retry: true,
+          headers: {
+            ...requestConfig.headers,
+            'X-CSRFToken': newToken,
+            ...(this.config.accessToken ? { 'Authorization': `Bearer ${this.config.accessToken}` } : {}),
+          },
+        });
       }
-    );
-
-    return protectedApi.request(config);
+      throw error;
+    }
   }
 } 
